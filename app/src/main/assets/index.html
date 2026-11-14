@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IFNAS DAILY ORDER</title>
+<style>
+body{margin:0;font-family:Arial;background:#f5efff;color:#28123f}
+header{background:#54208d;color:white;padding:25px;border-radius:0 0 20px 20px}
+main{padding:15px}
+.card{background:white;padding:15px;border-radius:14px;margin:12px 0}
+button{padding:12px;border:0;border-radius:9px;background:#7135b5;color:white;font-weight:bold}
+.tabs{display:flex;gap:10px}
+.tabs button{flex:1}
+input,select{padding:10px;border:1px solid #ddd;border-radius:8px;min-width:0}
+.addrow{display:flex;gap:5px}
+.addrow input:first-child{flex:1;min-width:0}
+.item{display:flex;gap:6px;align-items:center;padding:10px 0;border-bottom:1px solid #eee}
+.item b{flex:1;font-size:13px}
+.item input{width:55px}
+.item select{width:65px}
+.del{background:#e74c3c;padding:8px}
+.active{background:#28123f}
+.full{width:100%;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+<h2>IFNAS DAILY ORDER</h2>
+<p>Daily Grocery & Vegetable Order</p>
+</header>
+<main>
+<div class="card">
+Order Date<br><br>
+<input type="date" id="orderDate">
+</div>
+
+<div class="tabs">
+<button id="gTab" class="active" onclick="switchTab('g')">Grocery</button>
+<button id="vTab" onclick="switchTab('v')">Vegetables</button>
+</div>
+
+<div class="card">
+<h3 id="heading">Grocery Items</h3>
+<div class="addrow">
+<input id="itemName" placeholder="Item name">
+<input id="itemQty" type="number" placeholder="Qty">
+<select id="itemUnit">
+<option>kg</option>
+<option>gram</option>
+<option>pcs</option>
+<option>packet</option>
+<option>litre</option>
+<option>bunch</option>
+</select>
+</div>
+<button class="full" onclick="addItem()">+ Add Item</button>
+<div id="itemList"></div>
+</div>
+
+<div class="card">
+<button class="full" onclick="saveOrder()">Save Daily Order</button>
+<button class="full" onclick="shareOrder()">WhatsApp Share</button>
+<button class="full" onclick="shareBoth()">Share Both Separately</button>
+</div>
+
+<div class="card">
+<h3>Order History</h3>
+<div id="historyList">No saved orders</div>
+</div>
+</main>
+
+<script>
+let type='g';
+let lists=JSON.parse(localStorage.getItem('ifnasList')||'{"g":[],"v":[]}');
+let orders=JSON.parse(localStorage.getItem('ifnasOrders')||'[]');
+
+const el=id=>document.getElementById(id);
+el('orderDate').value=new Date().toLocaleDateString('en-CA');
+
+function saveData(){
+localStorage.setItem('ifnasList',JSON.stringify(lists));
+localStorage.setItem('ifnasOrders',JSON.stringify(orders));
+}
+
+function switchTab(t){
+type=t;
+el('gTab').classList.toggle('active',t==='g');
+el('vTab').classList.toggle('active',t==='v');
+el('heading').textContent=t==='g'?'Grocery Items':'Vegetable Items';
+render();
+}
+
+function addItem(){
+let n=el('itemName').value.trim();
+if(!n){alert('Enter item name');return}
+if(lists[type].some(x=>x.name.toLowerCase()===n.toLowerCase())){
+alert('Already exists');return;
+}
+lists[type].push({name:n,qty:'',unit:el('itemUnit').value});
+el('itemName').value='';
+el('itemQty').value='';
+saveData();render();
+}
+
+function render(){
+let root=el('itemList');
+root.innerHTML='';
+lists[type].forEach((x,i)=>{
+let d=document.createElement('div');
+d.className='item';
+let b=document.createElement('b');
+b.textContent=(i+1)+'. '+x.name;
+b.onclick=()=>{
+let n=prompt('Edit item name',x.name);
+if(n&&n.trim()){x.name=n.trim();saveData();render()}
+};
+let q=document.createElement('input');
+q.type='number';q.placeholder='Qty';q.value=x.qty;
+q.onchange=()=>{x.qty=q.value;saveData()};
+let u=document.createElement('select');
+['kg','gram','pcs','packet','litre','bunch'].forEach(v=>{
+let o=document.createElement('option');o.textContent=v;
+o.selected=x.unit===v;u.appendChild(o);
+});
+u.onchange=()=>{x.unit=u.value;saveData()};
+let del=document.createElement('button');
+del.className='del';del.textContent='×';
+del.onclick=()=>{lists[type].splice(i,1);saveData();render()};
+d.append(b,q,u,del);root.appendChild(d);
+});
+showHistory();
+}
+
+function selected(t){
+return lists[t].filter(x=>Number(x.qty)>0);
+}
+
+function makeMessage(t,a,date){
+let title=t==='g'?'GROCERY ORDER':'VEGETABLE ORDER';
+return '*IFNAS DAILY ORDER*\n*'+title+'*\nDate: '+date+'\n\n'+
+a.map((x,i)=>(i+1)+'. '+x.name+' - '+x.qty+' '+x.unit).join('\n');
+}
+
+function send(t,a,date){
+location.href='https://wa.me/?text='+encodeURIComponent(makeMessage(t,a,date));
+}
+
+function shareOrder(){
+let a=selected(type);
+if(!a.length){alert('Enter quantity first');return}
+send(type,a,el('orderDate').value);
+}
+
+function shareBoth(){
+let g=selected('g'),v=selected('v'),d=el('orderDate').value;
+if(!g.length&&!v.length){alert('Enter quantity first');return}
+if(g.length&&v.length){
+send('g',g,d);
+setTimeout(()=>{if(confirm('Open Vegetable order now?'))send('v',v,d)},1500);
+}else send(g.length?'g':'v',g.length?g:v,d);
+}
+
+function saveOrder(){
+let g=selected('g').map(x=>({...x}));
+let v=selected('v').map(x=>({...x}));
+if(!g.length&&!v.length){alert('Enter quantity first');return}
+orders.unshift({date:el('orderDate').value,g,v});
+saveData();showHistory();alert('Order saved!');
+}
+
+function showHistory(){
+let root=el('historyList');root.innerHTML='';
+if(!orders.length){root.textContent='No saved orders';return}
+orders.forEach((o,i)=>{
+let d=document.createElement('div');
+d.className='item';
+let b=document.createElement('b');
+b.textContent=o.date+' | Grocery '+o.g.length+' | Vegetables '+o.v.length;
+let g=document.createElement('button');
+g.textContent='G';g.onclick=()=>o.g.length?send('g',o.g,o.date):alert('No Grocery items');
+let v=document.createElement('button');
+v.textContent='V';v.onclick=()=>o.v.length?send('v',o.v,o.date):alert('No Vegetable items');
+let del=document.createElement('button');
+del.textContent='×';del.className='del';
+del.onclick=()=>{orders.splice(i,1);saveData();showHistory()};
+d.append(b,g,v,del);root.appendChild(d);
+});
+}
+render();
+</script>
+</body>
+</html>
